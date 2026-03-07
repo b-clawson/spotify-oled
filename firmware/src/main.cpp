@@ -367,11 +367,10 @@ bool pollBackend() {
         Serial.println("[Spotify] New track!");
         currentTrackId = trackId;
 
-        if (downloadAndDecodeImage(imageUrl)) {
-            displayAlbumArt();
-            scrollText = track + " - " + artist;
-            scrollPosition = 64;
-        }
+        // Download and decode - TJpgDec draws directly to display
+        downloadAndDecodeImage(imageUrl);
+        scrollText = track + " - " + artist;
+        scrollPosition = 64;
     }
 
     return true;
