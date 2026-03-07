@@ -42,14 +42,32 @@ if not CLIENT_ID or not CLIENT_SECRET:
 # This allows Railway to use a pre-authenticated token
 if SPOTIFY_CACHE:
     try:
-        print("[Spotify] Writing cache from SPOTIFY_CACHE environment variable")
+        print("[Spotify] SPOTIFY_CACHE env var found")
+        print(f"[Spotify] SPOTIFY_CACHE length: {len(SPOTIFY_CACHE)} chars")
+        print(f"[Spotify] SPOTIFY_CACHE first 100 chars: {SPOTIFY_CACHE[:100]}")
+
         with open(".spotify_cache", "w") as f:
             # SPOTIFY_CACHE should be JSON string
             cache_data = json.loads(SPOTIFY_CACHE)
             json.dump(cache_data, f)
+
         print("[Spotify] Cache file created successfully")
+
+        # Verify the file was written
+        with open(".spotify_cache", "r") as f:
+            content = f.read()
+            print(f"[Spotify] Cache file size: {len(content)} bytes")
+            print(f"[Spotify] Cache file first 100 chars: {content[:100]}")
     except Exception as e:
         print(f"[Warning] Failed to write cache from environment: {e}")
+        import traceback
+        traceback.print_exc()
+else:
+    print("[Spotify] No SPOTIFY_CACHE env var, checking for .spotify_cache file")
+    if os.path.exists(".spotify_cache"):
+        print("[Spotify] .spotify_cache file exists")
+    else:
+        print("[Spotify] WARNING: No cache file or env var found!")
 
 # =============================================================================
 # Spotify Client Setup
