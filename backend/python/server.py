@@ -13,7 +13,6 @@ import os
 import time
 from typing import Optional
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from dotenv import load_dotenv
@@ -30,12 +29,24 @@ PORT = int(os.getenv("PORT", "8000"))
 CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
 CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
 REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI", "http://localhost:8888/callback")
+SPOTIFY_CACHE = os.getenv("SPOTIFY_CACHE")  # Optional: cache as JSON string
 
 # Validate configuration
 if not CLIENT_ID or not CLIENT_SECRET:
     print("[ERROR] Missing Spotify credentials!")
     print("Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in .env file")
     exit(1)
+
+# Write cache from environment variable if provided and file doesn't exist
+if SPOTIFY_CACHE and not os.path.exists(".spotify_cache"):
+    try:
+        print("[Spotify] Writing cache from environment variable...")
+        with open(".spotify_cache", "w") as f:
+            # SPOTIFY_CACHE should be the JSON content as a string
+            f.write(SPOTIFY_CACHE)
+        print("[Spotify] Cache file created successfully")
+    except Exception as e:
+        print(f"[Warning] Failed to write cache from environment: {e}")
 
 # =============================================================================
 # Spotify Client Setup
