@@ -30,7 +30,7 @@ PORT = int(os.getenv("PORT", "8000"))
 CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
 CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
 REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI", "http://localhost:8888/callback")
-SPOTIFY_CACHE = os.getenv("SPOTIFY_CACHE")  # Optional: cache as JSON string
+REFRESH_TOKEN = os.getenv("SPOTIFY_REFRESH_TOKEN")  # Optional: for Railway deployment
 
 # Validate configuration
 if not CLIENT_ID or not CLIENT_SECRET:
@@ -38,32 +38,25 @@ if not CLIENT_ID or not CLIENT_SECRET:
     print("Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in .env file")
     exit(1)
 
-# Write cache from environment variable if provided
-# This allows Railway to use a pre-authenticated token
-if SPOTIFY_CACHE:
+# Write cache from refresh token if provided (for Railway/production)
+# This allows Railway to use a pre-authenticated refresh token
+if REFRESH_TOKEN:
     try:
-        print("[Spotify] SPOTIFY_CACHE env var found")
-        print(f"[Spotify] SPOTIFY_CACHE length: {len(SPOTIFY_CACHE)} chars")
-        print(f"[Spotify] SPOTIFY_CACHE first 100 chars: {SPOTIFY_CACHE[:100]}")
-
+        print("[Spotify] SPOTIFY_REFRESH_TOKEN found, creating cache with refresh token")
+        # Create minimal cache with just the refresh token
+        # Spotipy will automatically fetch a new access token
+        cache_data = {
+            "refresh_token": REFRESH_TOKEN
+        }
         with open(".spotify_cache", "w") as f:
-            # SPOTIFY_CACHE should be JSON string
-            cache_data = json.loads(SPOTIFY_CACHE)
             json.dump(cache_data, f)
-
-        print("[Spotify] Cache file created successfully")
-
-        # Verify the file was written
-        with open(".spotify_cache", "r") as f:
-            content = f.read()
-            print(f"[Spotify] Cache file size: {len(content)} bytes")
-            print(f"[Spotify] Cache file first 100 chars: {content[:100]}")
+        print("[Spotify] Cache file created successfully with refresh token")
     except Exception as e:
-        print(f"[Warning] Failed to write cache from environment: {e}")
+        print(f"[Warning] Failed to write cache from refresh token: {e}")
         import traceback
         traceback.print_exc()
 else:
-    print("[Spotify] No SPOTIFY_CACHE env var, checking for .spotify_cache file")
+    print("[Spotify] No SPOTIFY_REFRESH_TOKEN env var, checking for .spotify_cache file")
     if os.path.exists(".spotify_cache"):
         print("[Spotify] .spotify_cache file exists")
     else:
