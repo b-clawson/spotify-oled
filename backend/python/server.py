@@ -1,0 +1,217 @@
+#!/usr/bin/env python3
+"""
+Spotify Album Art Display - Backend Server (Python FastAPI)
+
+This server:
+1. Authenticates with Spotify using OAuth 2.0
+2. Polls the "Currently Playing" endpoint
+3. Caches the latest track information
+4. Exposes a simple REST API for the ESP32
+"""
+
+import os
+import time
+from typing import Optional
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
+import spotipy
+from spotipy.oauth2 import SpotifyOAuth
+from dotenv import load_dotenv
+import uvicorn
+
+# Load environment variables
+load_dotenv()
+
+# =============================================================================
+# Configuration
+# =============================================================================
+
+PORT = int(os.getenv("PORT", "8000"))
+CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
+CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
+REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI", "http://localhost:8888/callback")
+
+# Validate configuration
+if not CLIENT_ID or not CLIENT_SECRET:
+    print("[ERROR] Missing Spotify credentials!")
+    print("Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in .env file")
+    exit(1)
+
+# =============================================================================
+# Spotify Client Setup
+# =============================================================================
+
+auth_manager = SpotifyOAuth(
+    client_id=CLIENT_ID,
+    client_secret=CLIENT_SECRET,
+    redirect_uri=REDIRECT_URI,
+    scope="user-read-currently-playing user-read-playback-state",
+    cache_path=".spotify_cache"
+)
+
+sp = spotipy.Spotify(auth_manager=auth_manager)
+
+# =============================================================================
+# Cache
+# =============================================================================
+
+class SimpleCache:
+    def __init__(self, ttl=30):
+        self.ttl = ttl
+        self.cache = {}
+        self.timestamps = {}
+
+    def get(self, key):
+        if key in self.cache:
+            if time.time() - self.timestamps[key] < self.ttl:
+                return self.cache[key]
+            else:
+                del self.cache[key]
+                del self.timestamps[key]
+        return None
+
+    def set(self, key, value):
+        self.cache[key] = value
+        self.timestamps[key] = time.time()
+
+cache = SimpleCache(ttl=30)
+
+# =============================================================================
+# FastAPI App
+# =============================================================================
+
+app = FastAPI(
+    title="Spotify Album Art Display Backend",
+    description="Backend API for ESP32 Spotify display",
+    version="1.0.0"
+)
+
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
+def get_current_track() -> Optional[dict]:
+    """Fetch currently playing track from Spotify."""
+    try:
+        current = sp.current_user_playing_track()
+
+        if not current or not current.get("is_playing"):
+            return None
+
+        item = current.get("item")
+        if not item:
+            return None
+
+        # Extract track information
+        track_data = {
+            "id": item["id"],
+            "playing": current["is_playing"],
+            "artist": ", ".join(artist["name"] for artist in item["artists"]),
+            "track": item["name"],
+            "album": item["album"]["name"],
+            "image": item["album"]["images"][0]["url"] if item["album"]["images"] else "",
+            "progress_ms": current.get("progress_ms", 0),
+            "duration_ms": item.get("duration_ms", 0),
+        }
+
+        return track_data
+
+    except spotipy.exceptions.SpotifyException as e:
+        print(f"[Spotify] API error: {e}")
+        return None
+    except Exception as e:
+        print(f"[Error] {e}")
+        return None
+
+# =============================================================================
+# API Endpoints
+# =============================================================================
+
+@app.get("/")
+async def root():
+    """Root endpoint with API information."""
+    return {
+        "service": "Spotify Album Art Display Backend",
+        "version": "1.0.0",
+        "endpoints": {
+            "/now-playing": "Get currently playing track",
+            "/health": "Health check",
+        }
+    }
+
+@app.get("/now-playing")
+async def now_playing():
+    """
+    Get currently playing track information.
+
+    Returns:
+        JSON with track info if something is playing, otherwise playing=false
+    """
+    try:
+        # Check cache first
+        track_data = cache.get("current_track")
+
+        if not track_data:
+            # Fetch from Spotify
+            track_data = get_current_track()
+
+            if track_data:
+                cache.set("current_track", track_data)
+
+        if not track_data or not track_data.get("playing"):
+            return {"playing": False}
+
+        return {
+            "playing": True,
+            "id": track_data["id"],
+            "artist": track_data["artist"],
+            "track": track_data["track"],
+            "album": track_data["album"],
+            "image": track_data["image"],
+            "progress_ms": track_data["progress_ms"],
+            "duration_ms": track_data["duration_ms"],
+        }
+
+    except Exception as e:
+        print(f"[API] Error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.get("/health")
+async def health():
+    """Health check endpoint."""
+    return {
+        "status": "ok",
+        "timestamp": time.time(),
+    }
+
+# =============================================================================
+# Background Task (Optional)
+# =============================================================================
+
+# You can add a background task to keep the cache warm
+# For now, the cache is updated on-demand when /now-playing is called
+
+# =============================================================================
+# Main
+# =============================================================================
+
+if __name__ == "__main__":
+    print("\n========================================")
+    print("Spotify Display Backend (Python)")
+    print("========================================")
+    print(f"Server starting on http://localhost:{PORT}")
+    print("\nEndpoints:")
+    print("  GET /now-playing")
+    print("  GET /health")
+    print("\nPress Ctrl+C to stop")
+    print("========================================\n")
+
+    # Check authentication on startup
+    try:
+        user = sp.current_user()
+        print(f"[Spotify] Authenticated as: {user['display_name']}")
+    except Exception as e:
+        print(f"[Spotify] Authentication failed: {e}")
+        print("Run this script once to complete OAuth flow, then restart")
+
+    uvicorn.run(app, host="0.0.0.0", port=PORT)
