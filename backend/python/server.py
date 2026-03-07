@@ -239,22 +239,8 @@ if __name__ == "__main__":
     print("\nPress Ctrl+C to stop")
     print("========================================\n")
 
-    # Check authentication on startup
-    try:
-        print("[Spotify] Testing authentication...")
-        user = sp.current_user()
-        print(f"[Spotify] ✓ Authenticated as: {user['display_name']}")
-
-        # Test now-playing immediately
-        test_track = get_current_track()
-        if test_track:
-            print(f"[Spotify] ✓ Currently playing: {test_track['track']}")
-        else:
-            print("[Spotify] ✓ No track currently playing")
-    except Exception as e:
-        print(f"[Spotify] ✗ Authentication failed: {e}")
-        print("[Spotify] Run this script once to complete OAuth flow, then restart")
-        import traceback
-        traceback.print_exc()
+    # Skip authentication test on startup to avoid hanging
+    # Auth will be tested on first API request
+    print("[Spotify] Server ready - authentication will be tested on first request")
 
     uvicorn.run(app, host="0.0.0.0", port=PORT)
