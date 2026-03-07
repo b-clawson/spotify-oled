@@ -43,12 +43,14 @@ if not CLIENT_ID or not CLIENT_SECRET:
 if REFRESH_TOKEN:
     try:
         print("[Spotify] SPOTIFY_REFRESH_TOKEN found, creating cache with refresh token")
-        # Create cache with refresh token and minimal token info
-        # Spotipy needs this structure to properly refresh tokens
+        # Create cache with refresh token and required fields
+        # expires_at set to 0 forces immediate refresh on first use
         cache_data = {
             "refresh_token": REFRESH_TOKEN,
             "token_type": "Bearer",
-            "scope": "user-read-currently-playing user-read-playback-state"
+            "scope": "user-read-currently-playing user-read-playback-state",
+            "expires_at": 0,  # Force immediate refresh
+            "expires_in": 3600
         }
         with open(".spotify_cache", "w") as f:
             json.dump(cache_data, f)
