@@ -15,7 +15,7 @@
 
 const char* WIFI_SSID = "Clawson (New) HOME";
 const char* WIFI_PASSWORD = "342westjamesstreet";
-const char* BACKEND_URL = "http://192.168.4.25:8000/now-playing";
+const char* BACKEND_URL = "https://spotify-oled-production.up.railway.app/now-playing";
 
 const unsigned long POLL_INTERVAL = 10000;  // 10 seconds
 const uint8_t BRIGHTNESS = 64;
@@ -155,6 +155,7 @@ bool downloadAndDecodeImage(const String& imageUrl) {
     Serial.println("[HTTP] Downloading: " + imageUrl);
 
     http.begin(imageUrl);
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
     int httpCode = http.GET();
 
     if (httpCode != HTTP_CODE_OK) {
@@ -274,6 +275,7 @@ bool pollBackend() {
 
     HTTPClient http;
     http.begin(BACKEND_URL);
+    http.setInsecure();  // Skip SSL certificate validation
     http.setTimeout(10000);  // Increased timeout to 10 seconds
 
     Serial.println("[HTTP] Sending GET request...");
