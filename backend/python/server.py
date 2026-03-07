@@ -141,13 +141,17 @@ def get_current_track() -> Optional[dict]:
             return None
 
         # Extract track information
+        # Use smallest image size to save memory on ESP32 (usually 64x64)
+        images = item["album"]["images"]
+        smallest_image = images[-1]["url"] if images else ""  # Last image is smallest
+
         track_data = {
             "id": item["id"],
             "playing": current["is_playing"],
             "artist": ", ".join(artist["name"] for artist in item["artists"]),
             "track": item["name"],
             "album": item["album"]["name"],
-            "image": item["album"]["images"][0]["url"] if item["album"]["images"] else "",
+            "image": smallest_image,
             "progress_ms": current.get("progress_ms", 0),
             "duration_ms": item.get("duration_ms", 0),
         }

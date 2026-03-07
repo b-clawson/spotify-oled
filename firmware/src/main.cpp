@@ -195,9 +195,24 @@ bool downloadAndDecodeImage(const String& imageUrl) {
     int imageSize = http.getSize();
     Serial.println("[HTTP] Size: " + String(imageSize) + " bytes");
 
-    uint8_t* jpegBuffer = (uint8_t*)malloc(imageSize);
+    // Try PSRAM first, fallback to regular RAM
+    uint8_t* jpegBuffer = nullptr;
+    if (psramFound()) {
+        jpegBuffer = (uint8_t*)ps_malloc(imageSize);
+        if (jpegBuffer) {
+            Serial.println("[Memory] Allocated " + String(imageSize) + " bytes from PSRAM");
+        }
+    }
+
     if (!jpegBuffer) {
-        Serial.println("[ERROR] Out of memory");
+        jpegBuffer = (uint8_t*)malloc(imageSize);
+        if (jpegBuffer) {
+            Serial.println("[Memory] Allocated " + String(imageSize) + " bytes from RAM");
+        }
+    }
+
+    if (!jpegBuffer) {
+        Serial.println("[ERROR] Out of memory (tried PSRAM and RAM)");
         http.end();
         return false;
     }
