@@ -9,6 +9,7 @@
 #include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 #include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>
+#include <TJpg_Decoder.h>
 
 // =============================================================================
 // CONFIGURATION
@@ -129,6 +130,29 @@ void connectWiFi() {
 // Image Processing
 // =============================================================================
 
+// TJpg_Decoder callback - called during JPEG decode to output pixels
+bool tft_output(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t* bitmap) {
+    // Crop/scale if needed, but for 64x64 images we can just display directly
+    if (y >= 64) return true;  // Skip if outside display
+
+    for (int16_t j = 0; j < h; j++) {
+        if (y + j >= 64) break;
+        for (int16_t i = 0; i < w; i++) {
+            if (x + i >= 64) break;
+
+            uint16_t rgb565 = bitmap[j * w + i];
+
+            // Convert RGB565 to RGB888 for the display
+            uint8_t r = ((rgb565 >> 11) & 0x1F) << 3;
+            uint8_t g = ((rgb565 >> 5) & 0x3F) << 2;
+            uint8_t b = (rgb565 & 0x1F) << 3;
+
+            dma_display->drawPixelRGB888(x + i, y + j, r, g, b);
+        }
+    }
+    return true;
+}
+
 void resizeImage(uint8_t* src, int srcW, int srcH, uint16_t* dst, int dstW, int dstH, int channels) {
     float xRatio = (float)srcW / dstW;
     float yRatio = (float)srcH / dstH;
@@ -190,17 +214,18 @@ bool downloadAndDecodeImage(const String& imageUrl) {
 
     http.end();
 
-    // TODO: Integrate TJpg_Decoder for real JPEG decoding
-    // For now, create colorful gradient placeholder
-    Serial.println("[IMAGE] Creating gradient placeholder");
-    for (int y = 0; y < 64; y++) {
-        for (int x = 0; x < 64; x++) {
-            uint8_t r = (x * 255) / 64;
-            uint8_t g = (y * 255) / 64;
-            uint8_t b = 128;
-            albumArtBuffer[y * 64 + x] = rgb888to565(r, g, b);
-        }
-    }
+    // Decode JPEG using TJpg_Decoder
+    Serial.println("[IMAGE] Decoding JPEG...");
+
+    // Set the output function callback
+    TJpgDec.setCallback(tft_output);
+
+    // Decode the JPEG image directly to the display
+    uint32_t dt = millis();
+    TJpgDec.drawJpg(0, 0, jpegBuffer, bytesRead);
+
+    dt = millis() - dt;
+    Serial.printf("[IMAGE] Decoded in %d ms\n", dt);
 
     free(jpegBuffer);
     return true;
@@ -362,6 +387,12 @@ void setup() {
     Serial.println("[Display] Initializing matrix...");
     initMatrix();
     Serial.println("[Display] Ready!");
+
+    // Initialize JPEG decoder
+    Serial.println("[JPEG] Initializing decoder...");
+    TJpgDec.setJpgScale(1);  // 1:1 scale (no scaling)
+    TJpgDec.setSwapBytes(false);  // RGB565 byte order
+    Serial.println("[JPEG] Decoder ready!");
 
     // Connect WiFi
     connectWiFi();
