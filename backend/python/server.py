@@ -43,14 +43,17 @@ if not CLIENT_ID or not CLIENT_SECRET:
 if REFRESH_TOKEN:
     try:
         print("[Spotify] SPOTIFY_REFRESH_TOKEN found, creating cache with refresh token")
-        # Create minimal cache with just the refresh token
-        # Spotipy will automatically fetch a new access token
+        # Create cache with refresh token and minimal token info
+        # Spotipy needs this structure to properly refresh tokens
         cache_data = {
-            "refresh_token": REFRESH_TOKEN
+            "refresh_token": REFRESH_TOKEN,
+            "token_type": "Bearer",
+            "scope": "user-read-currently-playing user-read-playback-state"
         }
         with open(".spotify_cache", "w") as f:
             json.dump(cache_data, f)
         print("[Spotify] Cache file created successfully with refresh token")
+
     except Exception as e:
         print(f"[Warning] Failed to write cache from refresh token: {e}")
         import traceback
@@ -75,6 +78,21 @@ auth_manager = SpotifyOAuth(
 )
 
 sp = spotipy.Spotify(auth_manager=auth_manager)
+
+# Test token refresh if using refresh token (for Railway debugging)
+if REFRESH_TOKEN:
+    try:
+        print("[Spotify] Testing token refresh with refresh token...")
+        token_info = auth_manager.get_access_token(as_dict=True, check_cache=False)
+        if token_info and token_info.get('access_token'):
+            print(f"[Spotify] ✓ Token refresh successful")
+            print(f"[Spotify] Access token expires in {token_info.get('expires_in', 'unknown')} seconds")
+        else:
+            print("[Spotify] ✗ Token refresh returned invalid data")
+    except Exception as e:
+        print(f"[Spotify] ✗ Token refresh failed: {e}")
+        import traceback
+        traceback.print_exc()
 
 # =============================================================================
 # Cache
