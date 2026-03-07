@@ -393,10 +393,10 @@ void loop() {
         lastPollTime = now;
     }
 
-    // Update scrolling text
-    if (scrollText.length() > 0) {
-        displayScrollingText(scrollText, 56);
-    }
+    // Scrolling text disabled - showing album art only
+    // if (scrollText.length() > 0) {
+    //     displayScrollingText(scrollText, 56);
+    // }
 
     delay(10);
 }
