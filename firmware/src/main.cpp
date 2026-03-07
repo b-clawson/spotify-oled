@@ -6,6 +6,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 #include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>
 
@@ -151,10 +152,13 @@ void resizeImage(uint8_t* src, int srcW, int srcH, uint16_t* dst, int dstW, int 
 }
 
 bool downloadAndDecodeImage(const String& imageUrl) {
+    WiFiClientSecure client;
+    client.setInsecure();  // Skip SSL certificate validation
+
     HTTPClient http;
     Serial.println("[HTTP] Downloading: " + imageUrl);
 
-    http.begin(imageUrl);
+    http.begin(client, imageUrl);
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
     int httpCode = http.GET();
 
@@ -273,9 +277,11 @@ bool pollBackend() {
     Serial.println("[WiFi] Connected - IP: " + WiFi.localIP().toString());
     Serial.println("[HTTP] Connecting to: " + String(BACKEND_URL));
 
+    WiFiClientSecure client;
+    client.setInsecure();  // Skip SSL certificate validation
+
     HTTPClient http;
-    http.begin(BACKEND_URL);
-    http.setInsecure();  // Skip SSL certificate validation
+    http.begin(client, BACKEND_URL);
     http.setTimeout(10000);  // Increased timeout to 10 seconds
 
     Serial.println("[HTTP] Sending GET request...");
