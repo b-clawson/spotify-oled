@@ -107,13 +107,17 @@ app = FastAPI(
 def get_current_track() -> Optional[dict]:
     """Fetch currently playing track from Spotify."""
     try:
+        print("[Spotify] Fetching current track...")
         current = sp.current_user_playing_track()
+        print(f"[Spotify] Response: {current is not None}")
 
         if not current or not current.get("is_playing"):
+            print("[Spotify] Nothing playing or not active")
             return None
 
         item = current.get("item")
         if not item:
+            print("[Spotify] No item in response")
             return None
 
         # Extract track information
@@ -128,13 +132,17 @@ def get_current_track() -> Optional[dict]:
             "duration_ms": item.get("duration_ms", 0),
         }
 
+        print(f"[Spotify] Track: {track_data['artist']} - {track_data['track']}")
         return track_data
 
     except spotipy.exceptions.SpotifyException as e:
         print(f"[Spotify] API error: {e}")
+        print(f"[Spotify] Error details: {e.http_status}, {e.msg}")
         return None
     except Exception as e:
-        print(f"[Error] {e}")
+        print(f"[Error] Unexpected error: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 # =============================================================================
@@ -222,10 +230,20 @@ if __name__ == "__main__":
 
     # Check authentication on startup
     try:
+        print("[Spotify] Testing authentication...")
         user = sp.current_user()
-        print(f"[Spotify] Authenticated as: {user['display_name']}")
+        print(f"[Spotify] ✓ Authenticated as: {user['display_name']}")
+
+        # Test now-playing immediately
+        test_track = get_current_track()
+        if test_track:
+            print(f"[Spotify] ✓ Currently playing: {test_track['track']}")
+        else:
+            print("[Spotify] ✓ No track currently playing")
     except Exception as e:
-        print(f"[Spotify] Authentication failed: {e}")
-        print("Run this script once to complete OAuth flow, then restart")
+        print(f"[Spotify] ✗ Authentication failed: {e}")
+        print("[Spotify] Run this script once to complete OAuth flow, then restart")
+        import traceback
+        traceback.print_exc()
 
     uvicorn.run(app, host="0.0.0.0", port=PORT)
