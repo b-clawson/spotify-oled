@@ -79,20 +79,9 @@ auth_manager = SpotifyOAuth(
 
 sp = spotipy.Spotify(auth_manager=auth_manager)
 
-# Test token refresh if using refresh token (for Railway debugging)
-if REFRESH_TOKEN:
-    try:
-        print("[Spotify] Testing token refresh with refresh token...")
-        token_info = auth_manager.get_access_token(as_dict=True, check_cache=False)
-        if token_info and token_info.get('access_token'):
-            print(f"[Spotify] ✓ Token refresh successful")
-            print(f"[Spotify] Access token expires in {token_info.get('expires_in', 'unknown')} seconds")
-        else:
-            print("[Spotify] ✗ Token refresh returned invalid data")
-    except Exception as e:
-        print(f"[Spotify] ✗ Token refresh failed: {e}")
-        import traceback
-        traceback.print_exc()
+# Don't test auth on startup - let it happen on first request
+# This prevents Railway from hanging during container startup
+print("[Spotify] Auth manager configured - will authenticate on first API request")
 
 # =============================================================================
 # Cache
