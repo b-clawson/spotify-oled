@@ -11,6 +11,7 @@ This server:
 
 import os
 import time
+import json
 from typing import Optional
 from fastapi import FastAPI, HTTPException
 import spotipy
@@ -37,28 +38,35 @@ if not CLIENT_ID or not CLIENT_SECRET:
     print("Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in .env file")
     exit(1)
 
-# Write cache from environment variable if provided and file doesn't exist
-if SPOTIFY_CACHE and not os.path.exists(".spotify_cache"):
-    try:
-        print("[Spotify] Writing cache from environment variable...")
-        with open(".spotify_cache", "w") as f:
-            # SPOTIFY_CACHE should be the JSON content as a string
-            f.write(SPOTIFY_CACHE)
-        print("[Spotify] Cache file created successfully")
-    except Exception as e:
-        print(f"[Warning] Failed to write cache from environment: {e}")
-
 # =============================================================================
 # Spotify Client Setup
 # =============================================================================
 
-auth_manager = SpotifyOAuth(
-    client_id=CLIENT_ID,
-    client_secret=CLIENT_SECRET,
-    redirect_uri=REDIRECT_URI,
-    scope="user-read-currently-playing user-read-playback-state",
-    cache_path=".spotify_cache"
-)
+# For Railway/production: use memory cache handler if SPOTIFY_CACHE is provided
+# For local development: use file cache
+if SPOTIFY_CACHE:
+    print("[Spotify] Using memory cache from environment variable")
+    from spotipy.cache_handler import MemoryCache
+
+    cache_data = json.loads(SPOTIFY_CACHE)
+    cache_handler = MemoryCache(token_info=cache_data)
+
+    auth_manager = SpotifyOAuth(
+        client_id=CLIENT_ID,
+        client_secret=CLIENT_SECRET,
+        redirect_uri=REDIRECT_URI,
+        scope="user-read-currently-playing user-read-playback-state",
+        cache_handler=cache_handler
+    )
+else:
+    print("[Spotify] Using file cache (.spotify_cache)")
+    auth_manager = SpotifyOAuth(
+        client_id=CLIENT_ID,
+        client_secret=CLIENT_SECRET,
+        redirect_uri=REDIRECT_URI,
+        scope="user-read-currently-playing user-read-playback-state",
+        cache_path=".spotify_cache"
+    )
 
 sp = spotipy.Spotify(auth_manager=auth_manager)
 
