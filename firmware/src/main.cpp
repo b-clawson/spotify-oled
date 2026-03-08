@@ -10,6 +10,7 @@
 #include <ArduinoJson.h>
 #include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>
 #include <TJpg_Decoder.h>
+#include "spotify_logo.h"
 
 // =============================================================================
 // CONFIGURATION
@@ -293,46 +294,19 @@ void displayScrollingText(const String& text, int yPos) {
 }
 
 void drawSpotifyLogo() {
-    // Draw Spotify-style logo: green circle with curved lines
+    // Display embedded Spotify logo image
     dma_display->clearScreen();
 
-    int centerX = 32;
-    int centerY = 32;
-    int radius = 24;
+    for (int y = 0; y < 64; y++) {
+        for (int x = 0; x < 64; x++) {
+            uint16_t rgb565 = pgm_read_word(&SPOTIFY_LOGO[y * 64 + x]);
 
-    // Draw green circle background
-    for (int y = -radius; y <= radius; y++) {
-        for (int x = -radius; x <= radius; x++) {
-            if (x*x + y*y <= radius*radius) {
-                dma_display->drawPixelRGB888(centerX + x, centerY + y, 30, 215, 96);  // Spotify green
-            }
-        }
-    }
+            // Convert RGB565 to RGB888 for display
+            uint8_t r = ((rgb565 >> 11) & 0x1F) << 3;
+            uint8_t g = ((rgb565 >> 5) & 0x3F) << 2;
+            uint8_t b = (rgb565 & 0x1F) << 3;
 
-    // Draw three curved arcs (simplified Spotify icon)
-    uint16_t black = dma_display->color565(0, 0, 0);
-
-    // Top arc
-    for (int x = -15; x <= 15; x++) {
-        int y = -8 + (x*x)/60;  // Parabola
-        for (int t = 0; t < 3; t++) {  // Thickness
-            dma_display->drawPixel(centerX + x, centerY + y + t, black);
-        }
-    }
-
-    // Middle arc
-    for (int x = -12; x <= 12; x++) {
-        int y = 0 + (x*x)/50;
-        for (int t = 0; t < 3; t++) {
-            dma_display->drawPixel(centerX + x, centerY + y + t, black);
-        }
-    }
-
-    // Bottom arc
-    for (int x = -9; x <= 9; x++) {
-        int y = 8 + (x*x)/40;
-        for (int t = 0; t < 3; t++) {
-            dma_display->drawPixel(centerX + x, centerY + y + t, black);
+            dma_display->drawPixelRGB888(x, y, r, g, b);
         }
     }
 }
