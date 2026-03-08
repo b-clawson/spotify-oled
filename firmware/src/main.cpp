@@ -19,7 +19,7 @@ const char* WIFI_SSID = "Clawson (New) HOME";
 const char* WIFI_PASSWORD = "342westjamesstreet";
 const char* BACKEND_URL = "https://spotify-oled-production.up.railway.app/now-playing";
 
-const unsigned long POLL_INTERVAL = 10000;  // 10 seconds
+const unsigned long POLL_INTERVAL = 3000;  // 3 seconds - faster updates!
 const uint8_t BRIGHTNESS = 64;
 
 #define PANEL_RES_X 64
@@ -292,16 +292,53 @@ void displayScrollingText(const String& text, int yPos) {
     }
 }
 
-void displayFallback() {
+void drawSpotifyLogo() {
+    // Draw Spotify-style logo: green circle with curved lines
     dma_display->clearScreen();
-    dma_display->setTextSize(1);
-    dma_display->setCursor(4, 20);
-    dma_display->setTextColor(dma_display->color565(100, 100, 100));
-    dma_display->println("Spotify");
-    dma_display->setCursor(4, 30);
-    dma_display->println("Nothing");
-    dma_display->setCursor(4, 40);
-    dma_display->println("Playing");
+
+    int centerX = 32;
+    int centerY = 32;
+    int radius = 24;
+
+    // Draw green circle background
+    for (int y = -radius; y <= radius; y++) {
+        for (int x = -radius; x <= radius; x++) {
+            if (x*x + y*y <= radius*radius) {
+                dma_display->drawPixelRGB888(centerX + x, centerY + y, 30, 215, 96);  // Spotify green
+            }
+        }
+    }
+
+    // Draw three curved arcs (simplified Spotify icon)
+    uint16_t black = dma_display->color565(0, 0, 0);
+
+    // Top arc
+    for (int x = -15; x <= 15; x++) {
+        int y = -8 + (x*x)/60;  // Parabola
+        for (int t = 0; t < 3; t++) {  // Thickness
+            dma_display->drawPixel(centerX + x, centerY + y + t, black);
+        }
+    }
+
+    // Middle arc
+    for (int x = -12; x <= 12; x++) {
+        int y = 0 + (x*x)/50;
+        for (int t = 0; t < 3; t++) {
+            dma_display->drawPixel(centerX + x, centerY + y + t, black);
+        }
+    }
+
+    // Bottom arc
+    for (int x = -9; x <= 9; x++) {
+        int y = 8 + (x*x)/40;
+        for (int t = 0; t < 3; t++) {
+            dma_display->drawPixel(centerX + x, centerY + y + t, black);
+        }
+    }
+}
+
+void displayFallback() {
+    drawSpotifyLogo();
 }
 
 // =============================================================================
@@ -411,14 +448,8 @@ void setup() {
     // Connect WiFi
     connectWiFi();
 
-    // Ready message
-    dma_display->clearScreen();
-    dma_display->setTextSize(1);
-    dma_display->setCursor(4, 20);
-    dma_display->setTextColor(dma_display->color565(255, 255, 255));
-    dma_display->println("Spotify");
-    dma_display->setCursor(4, 30);
-    dma_display->println("Ready!");
+    // Ready message - show Spotify logo
+    drawSpotifyLogo();
 
     Serial.println("\n[System] Ready!");
     Serial.println("[System] Backend: " + String(BACKEND_URL));
