@@ -505,8 +505,10 @@ bool pollBackend() {
         if (currentTrackId != "") {
             // Was playing, now stopped - show idle GIF
             currentTrackId = "";
+            stopGIF();
             displayFallback();
         }
+        // Keep GIF playing, don't restart it
         return true;
     }
 
