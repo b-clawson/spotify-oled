@@ -383,8 +383,9 @@ bool startGIF(const char *filename) {
 
 void updateGIF() {
     if (isGifPlaying) {
-        if (gif.playFrame(false, NULL) == 0) {
-            // Animation complete, loop it
+        int result = gif.playFrame(false, NULL);
+        if (result == 0) {
+            // End of animation - restart immediately
             gif.reset();
         }
     }
@@ -446,7 +447,6 @@ void displayScrollingText(const String& text, int yPos) {
 void drawSpotifyLogo() {
     // Start playing the animated GIF
     if (!isGifPlaying) {
-        dma_display->clearScreen();
         startGIF("/idle.gif");
     }
 }
@@ -609,5 +609,6 @@ void loop() {
     //     displayScrollingText(scrollText, 56);
     // }
 
-    delay(10);
+    // Small delay to prevent tight loop
+    delay(1);
 }
