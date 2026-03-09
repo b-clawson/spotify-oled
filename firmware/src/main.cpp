@@ -10,6 +10,8 @@
 #include <ArduinoJson.h>
 #include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>
 #include <TJpg_Decoder.h>
+#include <AnimatedGIF.h>
+#include <LittleFS.h>
 #include "spotify_logo.h"
 
 // =============================================================================
@@ -42,6 +44,11 @@ String scrollText = "";
 int scrollPosition = 0;
 unsigned long lastScrollTime = 0;
 const unsigned long SCROLL_DELAY = 50;
+
+// GIF player
+AnimatedGIF gif;
+File gifFile;
+bool isGifPlaying = false;
 
 // =============================================================================
 // Color Utilities
@@ -248,6 +255,149 @@ bool downloadAndDecodeImage(const String& imageUrl) {
 }
 
 // =============================================================================
+// GIF Animation Functions
+// =============================================================================
+
+// Callback function to draw GIF pixels to the display
+void GIFDraw(GIFDRAW *pDraw) {
+    uint8_t *s;
+    uint16_t *d, *usPalette, usTemp[320];
+    int x, y, iWidth;
+
+    iWidth = pDraw->iWidth;
+    if (iWidth > 64) iWidth = 64;
+
+    usPalette = pDraw->pPalette;
+    y = pDraw->iY + pDraw->y; // current line
+
+    s = pDraw->pPixels;
+    if (pDraw->ucDisposalMethod == 2) { // restore to background color
+        for (x = 0; x < iWidth; x++) {
+            if (s[x] == pDraw->ucTransparent)
+                s[x] = pDraw->ucBackground;
+        }
+        pDraw->ucHasTransparency = 0;
+    }
+
+    // Apply the new pixels to the main image
+    if (pDraw->ucHasTransparency) { // if transparency used
+        uint8_t *pEnd, c, ucTransparent = pDraw->ucTransparent;
+        int x, iCount;
+        pEnd = s + pDraw->iWidth;
+        x = 0;
+        iCount = 0; // count non-transparent pixels
+        while (x < pDraw->iWidth) {
+            c = ucTransparent - 1;
+            d = usTemp;
+            while (c != ucTransparent && s < pEnd) {
+                c = *s++;
+                if (c == ucTransparent) {
+                    s--;
+                } else {
+                    *d++ = usPalette[c];
+                    iCount++;
+                }
+            }
+            if (iCount) {
+                for (int xOffset = 0; xOffset < iCount; xOffset++) {
+                    dma_display->drawPixel(x + xOffset, y, usTemp[xOffset]);
+                }
+                x += iCount;
+                iCount = 0;
+            }
+            // skip over transparent pixels
+            c = ucTransparent;
+            while (c == ucTransparent && s < pEnd) {
+                c = *s++;
+                if (c == ucTransparent)
+                    iCount++;
+                else
+                    s--;
+            }
+            if (iCount) {
+                x += iCount;
+                iCount = 0;
+            }
+        }
+    } else {
+        s = pDraw->pPixels;
+        // Translate the 8-bit pixels through the RGB565 palette
+        for (x = 0; x < iWidth; x++) {
+            dma_display->drawPixel(x, y, usPalette[*s++]);
+        }
+    }
+}
+
+// File reading callbacks for AnimatedGIF
+void *GIFOpenFile(const char *fname, int32_t *pSize) {
+    gifFile = LittleFS.open(fname, "r");
+    if (gifFile) {
+        *pSize = gifFile.size();
+        return (void *)&gifFile;
+    }
+    return NULL;
+}
+
+void GIFCloseFile(void *pHandle) {
+    File *f = static_cast<File *>(pHandle);
+    if (f != NULL)
+        f->close();
+}
+
+int32_t GIFReadFile(GIFFILE *pFile, uint8_t *pBuf, int32_t iLen) {
+    int32_t iBytesRead;
+    iBytesRead = iLen;
+    File *f = static_cast<File *>(pFile->fHandle);
+    if ((pFile->iSize - pFile->iPos) < iLen)
+        iBytesRead = pFile->iSize - pFile->iPos - 1;
+    if (iBytesRead <= 0)
+        return 0;
+    iBytesRead = (int32_t)f->read(pBuf, iBytesRead);
+    pFile->iPos = f->position();
+    return iBytesRead;
+}
+
+int32_t GIFSeekFile(GIFFILE *pFile, int32_t iPosition) {
+    File *f = static_cast<File *>(pFile->fHandle);
+    f->seek(iPosition);
+    pFile->iPos = (int32_t)f->position();
+    return pFile->iPos;
+}
+
+bool startGIF(const char *filename) {
+    gif.begin(GIF_PALETTE_RGB565_LE);
+
+    if (!gif.open(filename, GIFOpenFile, GIFCloseFile, GIFReadFile, GIFSeekFile, GIFDraw)) {
+        Serial.println("[GIF] Failed to open file");
+        return false;
+    }
+
+    Serial.printf("[GIF] Opened %s - %dx%d\n",
+                  filename,
+                  gif.getCanvasWidth(),
+                  gif.getCanvasHeight());
+
+    isGifPlaying = true;
+    return true;
+}
+
+void updateGIF() {
+    if (isGifPlaying) {
+        if (gif.playFrame(false, NULL) == 0) {
+            // Animation complete, loop it
+            gif.reset();
+        }
+    }
+}
+
+void stopGIF() {
+    if (isGifPlaying) {
+        gif.close();
+        isGifPlaying = false;
+    }
+}
+
+// =============================================================================
 // Display Functions
 // =============================================================================
 
@@ -294,20 +444,10 @@ void displayScrollingText(const String& text, int yPos) {
 }
 
 void drawSpotifyLogo() {
-    // Display embedded Spotify logo image
-    dma_display->clearScreen();
-
-    for (int y = 0; y < 64; y++) {
-        for (int x = 0; x < 64; x++) {
-            uint16_t rgb565 = pgm_read_word(&SPOTIFY_LOGO[y * 64 + x]);
-
-            // Convert RGB565 to RGB888 for display
-            uint8_t r = ((rgb565 >> 11) & 0x1F) << 3;
-            uint8_t g = ((rgb565 >> 5) & 0x3F) << 2;
-            uint8_t b = (rgb565 & 0x1F) << 3;
-
-            dma_display->drawPixelRGB888(x, y, r, g, b);
-        }
+    // Start playing the animated GIF
+    if (!isGifPlaying) {
+        dma_display->clearScreen();
+        startGIF("/idle.gif");
     }
 }
 
@@ -362,8 +502,11 @@ bool pollBackend() {
 
     if (!doc["playing"].as<bool>()) {
         Serial.println("[Spotify] Nothing playing");
-        currentTrackId = "";
-        displayFallback();
+        if (currentTrackId != "") {
+            // Was playing, now stopped - show idle GIF
+            currentTrackId = "";
+            displayFallback();
+        }
         return true;
     }
 
@@ -377,6 +520,9 @@ bool pollBackend() {
     if (trackId != currentTrackId) {
         Serial.println("[Spotify] New track!");
         currentTrackId = trackId;
+
+        // Stop GIF if playing
+        stopGIF();
 
         // Download and decode - TJpgDec draws directly to display
         downloadAndDecodeImage(imageUrl);
@@ -399,6 +545,14 @@ void setup() {
     Serial.println("Spotify Album Art Display");
     Serial.println("ESP32-S3 + HUB75 LED Matrix");
     Serial.println("=================================\n");
+
+    // Initialize LittleFS
+    Serial.println("[LittleFS] Mounting filesystem...");
+    if (!LittleFS.begin(true)) {
+        Serial.println("[LittleFS] Mount failed!");
+        while(1) delay(1000);
+    }
+    Serial.println("[LittleFS] Mounted successfully!");
 
     // Allocate buffer
     albumArtBuffer = (uint16_t*)malloc(64 * 64 * sizeof(uint16_t));
@@ -441,6 +595,11 @@ void loop() {
     if (now - lastPollTime > POLL_INTERVAL) {
         pollBackend();
         lastPollTime = now;
+    }
+
+    // Update GIF animation if playing
+    if (isGifPlaying) {
+        updateGIF();
     }
 
     // Scrolling text disabled - showing album art only
